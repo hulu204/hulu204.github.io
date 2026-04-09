@@ -1,0 +1,13 @@
+{
+  "name": "hulu204-gitbook",
+  "private": true,
+  "description": "Build GitBook-style Markdown docs with HonKit",
+  "scripts": {
+    "build": "honkit build",
+    "serve": "honkit serve"
+  },
+  "devDependencies": {
+    "gitbook-plugin-sharing": "^1.0.2",
+    "honkit": "^6.1.4"
+  }
+}

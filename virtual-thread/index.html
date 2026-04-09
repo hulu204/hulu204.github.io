@@ -1,0 +1,1065 @@
+
+<!DOCTYPE HTML>
+<html lang="zh-hans" >
+    <head>
+        <meta charset="UTF-8">
+        <title>虚拟线程分享 · Hulu204's Blog</title>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="description" content="">
+        <meta name="generator" content="HonKit 6.1.7">
+        <meta name="author" content="hulu204">
+        
+        
+    
+    <link rel="stylesheet" href="../gitbook/style.css">
+
+    
+            
+                
+                <link rel="stylesheet" href="../gitbook/@honkit/honkit-plugin-highlight/website.css">
+                
+            
+                
+                <link rel="stylesheet" href="../gitbook/gitbook-plugin-search/search.css">
+                
+            
+                
+                <link rel="stylesheet" href="../gitbook/@honkit/honkit-plugin-fontsettings/website.css">
+                
+            
+        
+
+    
+
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+        
+    
+
+        
+    
+    
+    <meta name="HandheldFriendly" content="true"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon-precomposed" sizes="152x152" href="../gitbook/images/apple-touch-icon-precomposed-152.png">
+    <link rel="shortcut icon" href="../gitbook/images/favicon.ico" type="image/x-icon">
+
+    
+    
+    <link rel="prev" href="../" />
+    
+
+    </head>
+    <body>
+        
+<div class="book honkit-cloak">
+    <div class="book-summary">
+        
+            
+<div id="book-search-input" role="search">
+    <input type="text" placeholder="输入并搜索" />
+</div>
+
+            
+                <nav role="navigation">
+                
+
+
+<ul class="summary">
+    
+    
+
+    
+
+    
+        
+        
+    
+        <li class="chapter " data-level="1.1" data-path="../">
+            
+                <a href="../">
+            
+                    
+                    首页
+            
+                </a>
+            
+
+            
+        </li>
+    
+
+    
+        
+        <li class="header">Java 并发编程</li>
+        
+        
+    
+        <li class="chapter active" data-level="2.1" data-path="./">
+            
+                <a href="./">
+            
+                    
+                    虚拟线程分享
+            
+                </a>
+            
+
+            
+        </li>
+    
+
+    
+
+    <li class="divider"></li>
+
+    <li>
+        <a href="https://github.com/honkit/honkit" target="blank" class="gitbook-link">
+            本书使用 HonKit 发布
+        </a>
+    </li>
+</ul>
+
+
+                </nav>
+            
+        
+    </div>
+
+    <div class="book-body">
+        
+            <div class="body-inner">
+                
+                    
+
+<div class="book-header" role="navigation">
+    
+
+    <!-- Title -->
+    <h1>
+        <i class="fa fa-circle-o-notch fa-spin"></i>
+        <a href=".." >虚拟线程分享</a>
+    </h1>
+</div>
+
+
+
+
+                    <div class="page-wrapper" tabindex="-1" role="main">
+                        <div class="page-inner">
+                            
+<div id="book-search-results">
+    <div class="search-noresults">
+    
+                                <section class="normal markdown-section">
+                                
+                                <h1 id="一、背景">一、背景</h1>
+<p><code>虚拟线程是由JVM直接管理，通过 ForkJoinPool进行调度 ， 操作系统不再参与虚拟线程的生命周期，这就消除了可扩展性瓶颈。大规模的 JVM 应用程序可以处理数百万甚至数十亿的对象。由jdk19提出预览版本，jdk21提出正式版本，官方文档： ``https://openjdk.org/jeps/444</code></p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-1.png" alt=""></img></p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-2.png" alt=""></img></p>
+<p><strong>相关术语解析 </strong>：</p>
+<p><code>平 台线程 ： 平台线程是操作系统级别的线程，也就是传统意义上的线程，每个平台线程对应一个系统线程，创建和切换成本较高</code></p>
+<p><code>载体线程(Carrier Thread)：实际执行虚拟线程任务的平台线程，使用的载体线程池是ForkJoinPool</code></p>
+<p>虚拟线程 mount（挂载）：JVM 把虚拟线程分配给平台线程的操作称为 mount</p>
+<p>unmount（卸载）：取消分配平台线程的操作称为 unmount</p>
+<h1 id="二、-与传统异步模式的对比">二、 与传统异步模式的对比</h1>
+<p>虚拟线程的引入不仅仅是java并发模型的优化，更重要的是对编程范式的革新。它通过降低并发编程门槛、简化代码结构，改变了开发者处理高并发场景的方式</p>
+<h2 id="21、代码可读性">2.1、代码可读性</h2>
+<p>业务举例： 订单获取 → 【机票产线信息db获取 &amp; 酒店产线信息获取 &amp; 火车票产线信息获取】并行 →  发送邮件</p>
+<p><code>1、CompletableFuture</code></p>
+<p><code>传统的CompletableFuture的demo：</code></p>
+<pre><code class="lang-java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">processOrderAsync</span><span class="hljs-params">(String orderId)</span> {
+    <span class="hljs-comment">// 1. 获取订单</span>
+    CompletableFuture&lt;Order&gt; orderFuture = CompletableFuture.supplyAsync(
+        () -&gt; fetchOrder(orderId), ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>));
+
+    <span class="hljs-comment">// 2. 并行计算费用</span>
+    CompletableFuture&lt;List&lt;ServiceFee&gt;&gt; feesFuture = orderFuture.thenComposeAsync(order -&gt; {
+        List&lt;CompletableFuture&lt;ServiceFee&gt;&gt; feeFutures = Arrays.asList(
+            CompletableFuture.supplyAsync(() -&gt; queryFltInfo(order), ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>)),
+            CompletableFuture.supplyAsync(() -&gt; queryHtlInfo(order), ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>)),
+            CompletableFuture.supplyAsync(() -&gt; queryTrainInfo(order), ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>))
+        );
+
+        CompletableFuture&lt;Void&gt; allDone = CompletableFuture.allOf(
+            feeFutures.toArray(<span class="hljs-keyword">new</span> <span class="hljs-title class_">CompletableFuture</span>[<span class="hljs-number">0</span>]));
+
+        <span class="hljs-keyword">return</span> allDone.thenApply(v -&gt; feeFutures.stream()
+            .map(future -&gt; {
+                <span class="hljs-keyword">try</span> {
+                    <span class="hljs-keyword">return</span> future.get(<span class="hljs-number">30</span>, SECONDS);
+                } <span class="hljs-keyword">catch</span> (Exception e) {
+                    <span class="hljs-keyword">throw</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">CompletionException</span>(e);
+                }
+            })
+            .collect(Collectors.toList()));
+    }, ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>));
+
+    <span class="hljs-comment">// 3. 组合结果并发送邮件</span>
+    CompletableFuture&lt;Void&gt; finalFuture = feesFuture.thenAcceptBothAsync(
+        orderFuture,
+        (fees, order) -&gt; sendEmail(<span class="hljs-keyword">new</span> <span class="hljs-title class_">EmailContent</span>(order, fees)),
+        ExecutorServiceMgr.getExecutorService(<span class="hljs-string">"processOrderAsync"</span>)
+    ).get(timeoutMinutes, TimeUnit.MINUTES);
+}
+</code></pre>
+<p>2、虚拟线程</p>
+<p>相较之下虚拟线程发生了较大的编程范式转变，从异步回调变成了"同步"的写法，会更加便于理解</p>
+<pre><code class="lang-java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">processOrderVirtualThread</span><span class="hljs-params">(String orderId)</span> {
+    <span class="hljs-keyword">try</span> (<span class="hljs-type">var</span> <span class="hljs-variable">executor</span> <span class="hljs-operator">=</span> Executors.newVirtualThreadPerTaskExecutor()) {
+        <span class="hljs-comment">// 1. 获取订单（同步写法）</span>
+        <span class="hljs-type">Order</span> <span class="hljs-variable">order</span> <span class="hljs-operator">=</span> fetchOrder(orderId);
+
+        <span class="hljs-comment">// 2. 提交并行任务</span>
+        <span class="hljs-type">var</span> <span class="hljs-variable">flightFuture</span> <span class="hljs-operator">=</span> executor.submit(() -&gt; queryFltInfo(order));
+        <span class="hljs-type">var</span> <span class="hljs-variable">hotelFuture</span> <span class="hljs-operator">=</span> executor.submit(() -&gt; queryHtlInfo(order));
+        <span class="hljs-type">var</span> <span class="hljs-variable">trainFuture</span> <span class="hljs-operator">=</span> executor.submit(() -&gt; queryTrainInfo(order));
+
+        <span class="hljs-comment">// 3. 等待结果(同步等待但不会阻塞平台线程）</span>
+        List&lt;ServiceFee&gt; fees = List.of(
+            flightFuture.get(<span class="hljs-number">30</span>, SECONDS),  <span class="hljs-comment">// 挂起点 1</span>
+            hotelFuture.get(<span class="hljs-number">30</span>, SECONDS),   <span class="hljs-comment">// 挂起点 2</span>
+            trainFuture.get(<span class="hljs-number">30</span>, SECONDS)    <span class="hljs-comment">// 挂起点 3</span>
+        );
+
+        <span class="hljs-comment">// 4. 发送邮件</span>
+        sendEmail(<span class="hljs-keyword">new</span> <span class="hljs-title class_">EmailContent</span>(order, fees));
+    } <span class="hljs-keyword">catch</span> (Exception e) {
+        System.out.println(<span class="hljs-string">"处理失败: "</span> + e.getMessage());
+    }
+}
+</code></pre>
+<p>通过这个demo对比也可以理解虚拟线程的作用</p>
+<p>从关键过程着手：</p>
+<p>List<servicefee> fees = List.of(<br></br> flightFuture.get(30, SECONDS), // 挂起点 1<br></br>hotelFuture.get(30, SECONDS), // 挂起点 2<br></br>trainFuture.get(30, SECONDS) // 挂起点 3<br></br>);</servicefee></p>
+<p>对于这里的三个产线的信息获取，虽然是同步但是 <strong>运行时表现为非阻塞现象 </strong>，本质上来说其实还是阻塞的，只是换了阻塞的对象，从平台线程换成了廉价的虚拟线程</p>
+<p>这是基于虚拟线程的unmount，在阻塞点进行卸载，将虚拟线程从平台线程上卸载下来。此时该载体线程转而去执行其他的虚拟线程的操作，所以对于平台线程来说是没有阻塞的</p>
+<p>当Get()拿到了结果后，虚拟线程再回来mount到平台线程上，继续执行操作，重新装上的载体线程与之前的载体线程也可能不是同一个，所以对于抽象到虚拟线程的层面来说时候阻塞的</p>
+<p>这种方式对于传统线程直接阻塞平台线程的操作来说，虚拟线程提高了平台线程的利用率，从底层实现了少量平台线程就可以处理大量请求的可能</p>
+<p>这个关键过程这也说明了对虚拟线程的一个误区： <strong>错误地认为vt关注的性能重点在于上下文切换的速度， 但其实是vt主要关注的是提高以线程阻塞方式编写代码的服务的吞吐量</strong></p>
+<h2 id="22、线程池参数配置">2.2、线程池参数配置</h2>
+<p>关于线程池的参数配置依赖开发者的经验进行业务估算，易引发资源不足或者资源浪费，</p>
+<p>池化的目的是避免昂贵的线程创建成本，而 虚拟线程通过 <strong>轻量化资源模型 </strong>和 <strong>JVM 级自动调度 </strong>，对于虚拟线程来说创建成本可忽略不计，从根本上消解了池化的必要性。</p>
+<font style="background-color:rgba(186,206,253,0.7);">这里有个值得注意的点是，虚拟线程并不是说不需要去池化了，</font>
+
+<font style="background-color:rgba(186,206,253,0.7);">如果完全不再使用线程池也就无法通过原来的线程池，控制背压了，如果下游服务 P99 在 30s，虚拟线程会不断创建，不断积累在内存中，直到充满内存。</font>
+
+<font style="background-color:rgba(186,206,253,0.7);">进而造成不断 GC，但是回收不了多少内存，导致 CPU 飙高</font>
+
+<font style="background-color:rgba(186,206,253,0.7);">对于传统线程池来说，由于最大线程+队列的组合设计，有一个隐形的概念，即通过最大线程数控制最多并发多少个请求，也就是最多等待多少个请求，其他的就会到队列中。</font>
+
+<font style="background-color:rgba(186,206,253,0.7);">但是虚拟线程默认就是通过内存大小控制你并发多少个请求了。所以一般虚拟线程需要配合信号量使用，控制这个并发大小，即背压。</font>
+
+
+
+<p>虚拟线程的廉价体现在各指标上：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>虚拟线程</th>
+<th>平台线程（池化）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单线程内存开销</td>
+<td>~500B - 256KB</td>
+<td>~1MB（默认栈）</td>
+</tr>
+<tr>
+<td>创建耗时（单线程）</td>
+<td>~0.1μs</td>
+<td>~10μs</td>
+</tr>
+<tr>
+<td>最大并发能力（1GB 堆）</td>
+<td>~2,000,000</td>
+<td>~1,000</td>
+</tr>
+<tr>
+<td>阻塞操作开销</td>
+<td>0 载体线程占用</td>
+<td>1 线程阻塞</td>
+</tr>
+</tbody>
+</table>
+<p>简单来说：</p>
+<p>虚拟线程是KB级别的，平台线程是MB级别的</p>
+<h2 id="23、便于调试"><code>2.3、便于调试</code></h2>
+<p>因为会在线程池中拿到多个不同的线程去操作，其调度是依赖os的，所以传统的异步操作会导致堆栈信息碎片化，在调试的时候非常困难</p>
+<p>前面讲到虚拟线程在get()操作阻塞的时候是阻塞的虚拟线程而不是平台线程，vt的调度也是jvm显示地进行yield/resume 控制，而这里 对于载体线程的切换，对于开发者是透明无感的</p>
+<p>对开发来说，这些操作是在单一逻辑线程执行，我们在调试的时候面对的调试信息是在虚拟线程的维度，与物理线程的信息是解耦的，这在调试的时候也会更符合我们的直觉</p>
+<p>此处vt对于golang的相关实现来说的有点也是好定位，jvm从易定位触发，jfr可以完整监控vt</p>
+<h1 id="三、虚拟线程的原理"><code>三、虚拟线程的原理</code></h1>
+<p><code>原理的oracle视频学习链接： ``https://www.bilibili.com/video/BV1Ub4y1M7L3/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5</code></p>
+<p>虚拟线程 = continuation + scheduler</p>
+<p>scheduler本质上是一个ExecutorService</p>
+<h2 id="31、continuation">3.1、continuation</h2>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-3.png" alt=""></img></p>
+<p>这个demo可以看出来在 continuation 被第一次调用的时候只输出了before，这说明此时线程执行到yield后就没有继续执行了，此时调用isDone()方法输出的false，也说明没有继续执行</p>
+<p>第二次调用的时候是关键，可以看出第二次调用的时候只输出了after，并没有输出"before\n after"说明第二次调用的时候并不是从头开始调用的，而是从上次yield的地方继续执行</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-4.png" alt=""></img></p>
+<pre><code class="lang-java"><span class="hljs-keyword">package</span> com.example.demo;
+<span class="hljs-keyword">import</span> jdk.internal.vm.Continuation;
+<span class="hljs-keyword">import</span> jdk.internal.vm.ContinuationScope;
+
+
+<span class="hljs-comment">/**
+ * <span class="hljs-doctag">@author</span> congyanli
+ * <span class="hljs-doctag">@date</span> 2025/2/18
+ */</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">ContinuationDemo</span> {
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">ContinuationScope</span> <span class="hljs-variable">SCOPE</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ContinuationScope</span>(<span class="hljs-string">"demo"</span>);
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> {
+        <span class="hljs-type">Continuation</span> <span class="hljs-variable">continuation</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">Continuation</span>(SCOPE, () -&gt; {
+            System.out.printf(<span class="hljs-string">"before\n"</span>);
+            Continuation.<span class="hljs-keyword">yield</span>(SCOPE);
+            System.out.printf(<span class="hljs-string">"after\n"</span>);
+        });
+        continuation.run(); <span class="hljs-comment">//</span>
+        System.out.println(continuation.isDone());
+        continuation.run();
+        System.out.println(continuation.isDone());
+    }
+}
+</code></pre>
+<p>这部分 continuation 堆栈复制是虚拟线程实现的核心机制，在遇到阻塞点进行yield的时候，将堆栈信息保存的continuation中，等到continuation第二次run()的时候，将堆栈信息再复制回去，这里不一定还是会复制到原本的载体线程 上</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-5.png" alt=""></img></p>
+<h2 id="32、locksupport">3.2、locksupport</h2>
+<p>对于同步时绕不开的java.util.concurrent.locks包下的locksupport，可以分析源码看出来jdk21对于虚拟线程的处理，首先会判断当前线程是否是虚拟线程，如果当前线程不是虚拟线程，则park平台线程</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-6.png" alt=""></img></p>
+<p>如果当前线程是虚拟线程的话，对虚拟线程进行操作VirtualThreads.park();</p>
+<p>这段源码深入进去的话核心其实就是Continuation.yield(VTHREAD_SCOPE);也就是前面demo中的yield操作，在yield操作前后进行了卸载和重装的打标</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-7.png" alt=""></img></p>
+<p>对于unpark的代码其实也是对虚拟线程做了新操作</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-8.png" alt=""></img></p>
+<p>u npark的源码深入进去后的核心操作就是scheduler进行的调用操作：scheduler.execute(Continuation)，是让之前yield的Continuation继续执行，也就是demo中的第二次run()调用</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-9.png" alt=""></img></p>
+<h2 id="33、scheduler">3.3、scheduler</h2>
+<p>通过对lock的源码分析可以看 出scheduler在其中的作用只是调度 <font style="color:rgb(143,149,158);">Continuation的 </font>run()方法，去运行实际包装的用户任务的 Runnable ， scheduler的底层是使用的forkjoinpool线程池去做调度，这个线程池突出的特点是任务窃取以及防死锁的特点。</p>
+<h1 id="四、虚拟线程简单实践">四、虚拟线程简单实践</h1>
+<p>创建虚拟线程的方法：</p>
+<table>
+<thead>
+<tr>
+<th>Thread.startVirtualThread(）</th>
+<th>创建并启动一个虚拟线程</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Thread.ofVirtual().unstarted()</td>
+<td>创建一个虚拟线程，在通过start()方法启动该线程</td>
+</tr>
+<tr>
+<td>Executors.newVirtualThreadPerTaskExecutor()</td>
+<td>通过它的submit()方法提交任务</td>
+</tr>
+<tr>
+<td>Thread.ofVirtual().factory().newThread()</td>
+<td>创建一个虚拟线程工厂，再通过该工厂创建虚拟线程并启动</td>
+</tr>
+<tr>
+<td><font style="color:rgb(100,37,208);">Thread </font><font style="color:rgb(46,161,33);">. </font>ofPlatform <font style="color:rgb(46,161,33);">(). </font>unstarted <font style="color:rgb(46,161,33);">( </font><font style="color:rgb(100,37,208);">new </font> <font style="color:rgb(100,37,208);">DemoThread </font><font style="color:rgb(46,161,33);">())</font></td>
+<td>创建一个平台线程</td>
+</tr>
+</tbody>
+</table>
+<p>demo：</p>
+<pre><code class="lang-java"><span class="hljs-comment">/**
+ * <span class="hljs-doctag">@author</span> congyanli
+ * <span class="hljs-doctag">@date</span> 2025/2/15
+ */</span>
+<span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">VirtualDemo</span> {
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">doWork</span><span class="hljs-params">()</span> {
+        <span class="hljs-keyword">try</span> {
+            System.out.println(Thread.currentThread().getName() + <span class="hljs-string">" is working"</span>);
+            <span class="hljs-comment">// 虚拟线程的生命周期中在这里进行了卸载操作</span>
+            Thread.sleep(<span class="hljs-number">3000</span>);
+            <span class="hljs-comment">// 休眠结束重新挂载</span>
+        } <span class="hljs-keyword">catch</span> (Exception e) {
+        }
+    }
+
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> {
+        <span class="hljs-type">int</span> <span class="hljs-variable">MAX</span> <span class="hljs-operator">=</span> <span class="hljs-number">1000_000</span>;
+
+        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; MAX; i++) {
+            <span class="hljs-comment">// 使用线程导致OOM</span>
+             <span class="hljs-keyword">new</span> <span class="hljs-title class_">Thread</span>(VirtualDemo::doWork).start();
+            <span class="hljs-comment">// 使用虚拟线程会正常走到结束</span>
+<span class="hljs-comment">//            Thread.startVirtualThread(VirtualDemo::doWork);</span>
+        }
+
+        <span class="hljs-keyword">try</span> {
+            Thread.sleep(<span class="hljs-number">5000</span>);
+        } <span class="hljs-keyword">catch</span> (Exception e) {
+        }
+        System.out.println(<span class="hljs-string">"===================================END======================================="</span>);
+    }
+}
+</code></pre>
+<p>对于直接创建百万级别的平台线程，会造成oom，但是创建百万虚拟线程则会正常执行</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-10.png" alt=""></img></p>
+<h1 id="五、虚拟线程的绑定问题">五、虚拟线程的绑定问题</h1>
+<p>对于Native 代码阻塞和 <code>synchronized两个情况有绑定死锁情况</code></p>
+<h2 id="51、-synchronized导致的vt绑定">5.1、 <code>synchronized导致的vt绑定</code></h2>
+<h3 id="511synchronized--的锁绑定流程"><code>5.1.1.synchronized</code>  的锁绑定流程</h3>
+<ul>
+<li><strong>对象头标记 </strong>：使用对象头中的 Mark Word 直接存储  <strong>持有锁的平台线程指针 </strong>（JavaThread*）。</li>
+<li><strong>虚拟线程问题 </strong>：当虚拟线程（无固定平台线程）获取锁时，JVM 必须将其绑定到当前载体线程（CT）以记录锁持有者</li>
+</ul>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-11.png" alt=""></img></p>
+<p>官方文档（ <a href="https://openjdk.org/jeps/491" target="_blank">https://openjdk.org/jeps/491 </a>）中对于该问题的解释</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-12.png" alt=""></img></p>
+<p><strong>如果单纯sync发生线程绑定，会导致性能退化，虚拟线程变成平台线程执行，会影响并行度</strong></p>
+<h3 id="512、死锁场景">5.1.2、死锁场景</h3>
+<p>相关讨论： <a href="https://www.reddit.com/r/java/comments/1512xuo/virtual_threads_interesting_deadlock/" target="_blank">https://www.reddit.com/r/java/comments/1512xuo/virtual_threads_interesting_deadlock/</a></p>
+<p>死锁场景通常出现在 ReentrantLock + synchronized一起使用的场景，单纯使用二者之一都不会出现问题</p>
+<p>复现demo</p>
+<pre><code class="lang-java"><span class="hljs-keyword">public</span> <span class="hljs-keyword">class</span> <span class="hljs-title class_">Example</span> {
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">final</span> <span class="hljs-type">int</span> <span class="hljs-variable">NUMBER_OF_CORES</span> <span class="hljs-operator">=</span> Runtime.getRuntime().availableProcessors();
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-type">ReentrantLock</span> <span class="hljs-variable">lock</span> <span class="hljs-operator">=</span> <span class="hljs-keyword">new</span> <span class="hljs-title class_">ReentrantLock</span>();
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">volatile</span> <span class="hljs-keyword">static</span> <span class="hljs-type">int</span> <span class="hljs-variable">count</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>;
+
+    <span class="hljs-keyword">public</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">main</span><span class="hljs-params">(String[] args)</span> <span class="hljs-keyword">throws</span> InterruptedException {
+        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">100</span>; i++) {
+             Thread.startVirtualThread(() -&gt; {
+                doSthWithLock();
+                <span class="hljs-keyword">synchronized</span> (Example.class) {
+                    doSthWithLock();
+                }
+            });
+        }
+        <span class="hljs-keyword">while</span> (<span class="hljs-literal">true</span>) {
+            System.out.println(count);
+            Thread.sleep(<span class="hljs-number">1000</span>);
+        }
+
+    }
+
+    <span class="hljs-keyword">private</span> <span class="hljs-keyword">static</span> <span class="hljs-keyword">void</span> <span class="hljs-title function_">doSthWithLock</span><span class="hljs-params">()</span> {
+        lock.lock();
+        <span class="hljs-keyword">for</span> (<span class="hljs-type">int</span> <span class="hljs-variable">i</span> <span class="hljs-operator">=</span> <span class="hljs-number">0</span>; i &lt; <span class="hljs-number">10000</span>; i++) {
+            count++;
+        }
+        lock.unlock();
+    }
+
+}
+</code></pre>
+<p>这里用100个线程的话由于竞争激烈所以比较好复现，但是对于这个问题的分析用NUMBER_OF_CORES+1去复现场景拿到的dump文件会更好去分析</p>
+<p>基于NUMBER_OF_CORES+1情况去分析， 8核情况下 → 9 个 VT &amp; 8个平台线程</p>
+<p>死锁表现：</p>
+<p>理论count= 9*20000 = 180000，但是实际输出80000</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-13.png" alt=""></img></p>
+<p>现象分析：</p>
+<p>死锁输出80000说明有8个线程进行了synchronized外的锁，但是进行同步块内的循环相加</p>
+<p>复现的dump文件，通过idea的analyze stack trace or thread dump功能进行dump文件分析进行跳转，搜索park可以看到有两个平台线程分别在synchronized的内外进行了park</p>
+<p>对于8核cpu来说，只有8个平台线程供vt切换，首先不仅进入synchronized块会被pin住， <strong>等待锁被阻塞的时候也会被pin住，因为其平台线程持有了synchronized的monitor</strong></p>
+<p>park在synchronized同步块的虚拟线程A进入了ReentrantLock锁的AQS队列，拿到了lock资源以及synchronized资源，但是其实没有成功上锁，不然count就不是80000了，此时线程B持有了ReentrantLock资源和synchronized资源，在AQS队列中等待上锁</p>
+<p>其余线程进入synchronized的时候被pin在了其载体线程上，导致vt线程退化成平台线程，不能供其他vt线程进行载体线程切换，等待synchronized资源的时候被pin住，到这里的时候8个平台线程都已经被pin住，没有平台线程去做vt切换了</p>
+<p>能输出80000而不是90000，说明有一个线程B卡在了第一个ReentrantLock锁资源的获取上，dump文件也可以看出来有一个线程在synchronized同步块外发生了park，对于locksupport.park()操作不会释放任何锁，所以线程A还是持有了ReentrantLock资源，没有加10000，在等线程切换</p>
+<p>此时死锁成环的原因，稀缺的并不是锁资源，因为锁资源已经持有了，稀缺的是平台线程资源，没有os线程供切换</p>
+<p><strong>dump文件 </strong></p>
+<pre><code class="lang-java">{
+  <span class="hljs-string">"threadDump"</span>: {
+    <span class="hljs-string">"processId"</span>: <span class="hljs-string">"25914"</span>,
+    <span class="hljs-string">"time"</span>: <span class="hljs-string">"2025-02-17T06:47:14.241070Z"</span>,
+    <span class="hljs-string">"runtimeVersion"</span>: <span class="hljs-string">"21.0.5+11-LTS"</span>,
+    <span class="hljs-string">"threadContainers"</span>: [
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"1"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"main"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.Thread.sleep0(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Thread.sleep(Thread.java:509)"</span>,
+              <span class="hljs-string">"com.example.demo.Example.main(Example.java:30)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"9"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Reference Handler"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.ref.Reference.waitForReferencePendingList(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.Reference.processPendingReferences(Reference.java:246)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.Reference$ReferenceHandler.run(Reference.java:208)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"10"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Finalizer"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.Object.wait0(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Object.wait(Object.java:366)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Object.wait(Object.java:339)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.NativeReferenceQueue.await(NativeReferenceQueue.java:48)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:158)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.NativeReferenceQueue.remove(NativeReferenceQueue.java:89)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.Finalizer$FinalizerThread.run(Finalizer.java:173)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"11"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Signal Dispatcher"</span>,
+           <span class="hljs-string">"stack"</span>: [
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"18"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Common-Cleaner"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.misc.Unsafe.park(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.AbstractQueuedSynchronizer$ConditionObject.await(AbstractQueuedSynchronizer.java:1852)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.ReferenceQueue.await(ReferenceQueue.java:71)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.ReferenceQueue.remove0(ReferenceQueue.java:143)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.ref.ReferenceQueue.remove(ReferenceQueue.java:218)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.ref.CleanerImpl.run(CleanerImpl.java:140)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Thread.run(Thread.java:1583)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.misc.InnocuousThread.run(InnocuousThread.java:186)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"19"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Monitor Ctrl-Break"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/sun.nio.ch.SocketDispatcher.read0(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.SocketDispatcher.read(SocketDispatcher.java:47)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.NioSocketImpl.tryRead(NioSocketImpl.java:256)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.NioSocketImpl.implRead(NioSocketImpl.java:307)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.NioSocketImpl.read(NioSocketImpl.java:346)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.NioSocketImpl$1.read(NioSocketImpl.java:796)"</span>,
+              <span class="hljs-string">"java.base\/java.net.Socket$SocketInputStream.read(Unknown Source)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.cs.StreamDecoder.readBytes(StreamDecoder.java:350)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.cs.StreamDecoder.implRead(StreamDecoder.java:393)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.cs.StreamDecoder.lockedRead(StreamDecoder.java:217)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.cs.StreamDecoder.read(StreamDecoder.java:171)"</span>,
+              <span class="hljs-string">"java.base\/java.io.InputStreamReader.read(InputStreamReader.java:188)"</span>,
+              <span class="hljs-string">"java.base\/java.io.BufferedReader.fill(BufferedReader.java:160)"</span>,
+              <span class="hljs-string">"java.base\/java.io.BufferedReader.implReadLine(BufferedReader.java:370)"</span>,
+              <span class="hljs-string">"java.base\/java.io.BufferedReader.readLine(BufferedReader.java:347)"</span>,
+              <span class="hljs-string">"java.base\/java.io.BufferedReader.readLine(BufferedReader.java:436)"</span>,
+              <span class="hljs-string">"com.intellij.rt.execution.application.AppMainV2$1.run(AppMainV2.java:54)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"20"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"JFR Recorder Thread"</span>,
+           <span class="hljs-string">"stack"</span>: [
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"21"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"JFR Periodic Tasks"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.Object.wait0(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Object.wait(Object.java:366)"</span>,
+              <span class="hljs-string">"jdk.jfr\/jdk.jfr.internal.PlatformRecorder.takeNap(PlatformRecorder.java:559)"</span>,
+              <span class="hljs-string">"jdk.jfr\/jdk.jfr.internal.PlatformRecorder.periodicTask(PlatformRecorder.java:527)"</span>,
+              <span class="hljs-string">"jdk.jfr\/jdk.jfr.internal.PlatformRecorder.lambda$startDiskMonitor$1(PlatformRecorder.java:446)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Thread.run(Thread.java:1583)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"29"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Notification Thread"</span>,
+           <span class="hljs-string">"stack"</span>: [
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"47"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"Attach Listener"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.Thread.getStackTrace(Thread.java:2451)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.vm.ThreadDumper.dumpThreadToJson(ThreadDumper.java:270)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.vm.ThreadDumper.dumpThreadsToJson(ThreadDumper.java:242)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.vm.ThreadDumper.dumpThreadsToJson(ThreadDumper.java:206)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.vm.ThreadDumper.dumpThreadsToFile(ThreadDumper.java:117)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.vm.ThreadDumper.dumpThreadsToJson(ThreadDumper.java:85)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"49"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"RMI TCP Accept-0"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/sun.nio.ch.Net.accept(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/sun.nio.ch.NioSocketImpl.accept(NioSocketImpl.java:748)"</span>,
+              <span class="hljs-string">"java.base\/java.net.ServerSocket.implAccept(ServerSocket.java:698)"</span>,
+              <span class="hljs-string">"java.base\/java.net.ServerSocket.platformImplAccept(ServerSocket.java:663)"</span>,
+              <span class="hljs-string">"java.base\/java.net.ServerSocket.implAccept(ServerSocket.java:639)"</span>,
+              <span class="hljs-string">"java.base\/java.net.ServerSocket.implAccept(ServerSocket.java:585)"</span>,
+              <span class="hljs-string">"java.base\/java.net.ServerSocket.accept(ServerSocket.java:543)"</span>,
+              <span class="hljs-string">"jdk.management.agent\/sun.management.jmxremote.LocalRMIServerSocketFactory$1.accept(LocalRMIServerSocketFactory.java:52)"</span>,
+              <span class="hljs-string">"java.rmi\/sun.rmi.transport.tcp.TCPTransport$AcceptLoop.executeAcceptLoop(TCPTransport.java:424)"</span>,
+              <span class="hljs-string">"java.rmi\/sun.rmi.transport.tcp.TCPTransport$AcceptLoop.run(TCPTransport.java:388)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.Thread.run(Thread.java:1583)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"32"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.misc.Unsafe.park(Native Method)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.parkOnCarrierThread(VirtualThread.java:675)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.park(VirtualThread.java:607)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.System$2.parkVirtualThread(System.java:2643)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.misc.VirtualThreads.park(VirtualThreads.java:54)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.LockSupport.park(LockSupport.java:219)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:754)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:990)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.ReentrantLock$Sync.lock(ReentrantLock.java:153)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.ReentrantLock.lock(ReentrantLock.java:322)"</span>,
+              <span class="hljs-string">"com.example.demo.Example.doSthWithLock(Example.java:36)"</span>,
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"33"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"34"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"35"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"36"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"37"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"38"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"39"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.park(VirtualThread.java:596)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.System$2.parkVirtualThread(System.java:2643)"</span>,
+              <span class="hljs-string">"java.base\/jdk.internal.misc.VirtualThreads.park(VirtualThreads.java:54)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.LockSupport.park(LockSupport.java:219)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:754)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:990)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.ReentrantLock$Sync.lock(ReentrantLock.java:153)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.locks.ReentrantLock.lock(ReentrantLock.java:322)"</span>,
+              <span class="hljs-string">"com.example.demo.Example.doSthWithLock(Example.java:36)"</span>,
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:22)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"30"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">""</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"com.example.demo.Example.lambda$main$0(Example.java:24)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.run(VirtualThread.java:329)"</span>
+           ]
+         }
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"20"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"java.util.concurrent.ThreadPoolExecutor@3cbdea3f"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"0"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"java.util.concurrent.ScheduledThreadPoolExecutor@9225652"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"0"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"ForkJoinPool.commonPool\/jdk.internal.vm.SharedThreadContainer@18b5407e"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"0"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"java.util.concurrent.ThreadPoolExecutor@3271cad8"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"0"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"ForkJoinPool-1\/jdk.internal.vm.SharedThreadContainer@6e48fbd4"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"31"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-1"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"40"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-2"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:248)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"41"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-3"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:248)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"42"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-4"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"43"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-5"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"44"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-6"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"45"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-7"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         },
+         {
+           <span class="hljs-string">"tid"</span>: <span class="hljs-string">"46"</span>,
+           <span class="hljs-string">"name"</span>: <span class="hljs-string">"ForkJoinPool-1-worker-8"</span>,
+           <span class="hljs-string">"stack"</span>: [
+              <span class="hljs-string">"java.base\/jdk.internal.vm.Continuation.run(Continuation.java:251)"</span>,
+              <span class="hljs-string">"java.base\/java.lang.VirtualThread.runContinuation(VirtualThread.java:245)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask$RunnableExecuteAction.exec(ForkJoinTask.java:1423)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:387)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1312)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1843)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1808)"</span>,
+              <span class="hljs-string">"java.base\/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:188)"</span>
+           ]
+         }
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"8"</span>
+      },
+      {
+        <span class="hljs-string">"container"</span>: <span class="hljs-string">"java.util.concurrent.ScheduledThreadPoolExecutor@575fd379"</span>,
+        <span class="hljs-string">"parent"</span>: <span class="hljs-string">"&lt;root&gt;"</span>,
+        <span class="hljs-string">"owner"</span>: <span class="hljs-literal">null</span>,
+        <span class="hljs-string">"threads"</span>: [
+        ],
+        <span class="hljs-string">"threadCount"</span>: <span class="hljs-string">"0"</span>
+      }
+    ]
+  }
+}
+</code></pre>
+<h2 id="52、解决方案"><code>5.2、解决方案</code></h2>
+<h3 id="521、使用reentrantlock">5.2.1、使用ReentrantLock</h3>
+<p><code>对于 sync发生线程绑定，会导致性能退化的情况，目前的解决办法是使用</code> ReentrantLock进行替代</p>
+<p>ReentrantLock的底层实现框架是AQS，而AQS对于虚拟线程是无感知兼容的，相比于 <code>synchronized对于平台线程的绑定，AQS的owner字段记录的是 虚拟线程自身，无需绑定到特定载体线程，所以天然支持虚拟线程的卸载</code></p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-14.png" alt=""></img></p>
+<h3 id="522、jfr监控">5.2.2、JFR监控</h3>
+<p>虚拟线程是由jvm管理的特质使得虚拟线程可以由jfr进行监控，jep444（ <code>https://openjdk.org/jeps/444</code> ）文档中针对同步块中虚拟线程无法卸载的情况给出了jfr的监控方案</p>
+<!-- 这是一张图片，ocr 内容为： -->
+<p><img src="images/image-15.png" alt=""></img></p>
+<p><code>传统的线程池监控依赖于手动埋点，虚拟线程</code> <code>JDK Flight Recorder 原生支持</code></p>
+<p><code>对于虚拟线程jfr 通过几个新事件支持虚拟线程（文档： ``https://bugs.openjdk.org/browse/JDK-8277131 ``）</code></p>
+<p><code>1、jdk.VirtualThreadStart</code>  和  <code>jdk.VirtualThreadEnd</code>  表示虚拟线程开始和结束。这些事件默认为禁用。</p>
+<p><code>2、jdk.VirtualThreadPinned</code>  表示虚拟线程在被固定时停泊，即未释放其平台线程（请参阅讨论）。该事件默认启用，阈值为 20ms。</p>
+<p><code>3、jdk.VirtualThreadSubmitFailed</code>  表示启动或取消驻留虚拟线程失败，可能是由于资源问题。该事件默认已启用。</p>
+<p>对于jfr的使用可以学习： <a href="https://www.bilibili.com/video/BV148411K742/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5" target="_blank">https://www.bilibili.com/video/BV148411K742/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5</a></p>
+<h3 id="523、底层解决">5.2.3、底层解决</h3>
+<p><code>未来jdk24已经从底层进行了解决： ``https://openjdk.org/jeps/491</code></p>
+<h4 id="1、lockingmode"><code>1、LockingMode</code></h4>
+<p>主要是锁模式实现发生变化：-XX:LockingMode=2</p>
+<ul>
+<li><strong>传统锁模式（Locking Mode 1） </strong>：<br></br>使用对象头 Mark Word 直接存储  <strong>平台线程指针 </strong>，导致虚拟线程必须绑定到载体线程</li>
+<li><strong>新锁模式（Locking Mode 2） </strong>：<ul>
+<li>引入  <strong>Lock Stack </strong> 数据结构，记录线程的锁持有状态（包括虚拟线程）</li>
+<li>对象头 Mark Word 指向 Lock Stack 中的锁记录，而非平台线程指针</li>
+</ul>
+</li>
+</ul>
+<pre><code class="lang-java"><span class="hljs-comment">/**
+* lock stack数据结构demo
+*/</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">JavaThread</span> {
+    LockStack lockStack; <span class="hljs-comment">// 每个线程（包括虚拟线程）独立的锁栈</span>
+}
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">LockStack</span> {
+    LockEntry[] entries; <span class="hljs-comment">// 记录当前持有的锁</span>
+}
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">LockEntry</span> {
+    Object lock;      <span class="hljs-comment">// 锁对象</span>
+    <span class="hljs-type">int</span> recursionCount; <span class="hljs-comment">// 重入次数</span>
+}
+</code></pre>
+<h4 id="2、monitor-重量锁模式"><strong>2、Monitor 重量锁模式</strong></h4>
+<p>1）重量级锁记录虚拟线程 TID 而非 JavaThread 指针</p>
+<p>2）EntryList 唤醒时兼容虚拟线程调度</p>
+<h1 id="六、落地">六、落地</h1>
+<p>下一个LTS是JDK 25，由于JDK 21升级JDK 25是透明升级的，不牵涉代码变更，所以虚拟线程可以在生产环境落地。</p>
+<h2 id="61、使用场景">6.1、使用场景</h2>
+<p>适合 <strong>高并发 I/O 密集型任务 </strong>，对于cpu密集型的任务并无 优势， CPU 密集型任务需要持续占用 CPU，而虚拟线程的载体线程池默认大小与 CPU 核心数相同（ <code>ForkJoinPool</code> 的并行度）。若虚拟线程全部忙于计算，载体线程会被占满，用vt比用线程池有一些调度上的开销，所以对于cpu密集型的话不如使用传统线程池</p>
+<h2 id="62、堆外内存收益">6.2、堆外内存收益</h2>
+<p><strong>由于线程栈存储位置的变化， </strong>传统操作系统的线程（平台线程）需要固定的堆外内存（~1MB/线程）存储线程栈，而虚拟线程的栈由  <strong>JVM 托管在堆内存 </strong> 中，按需动态扩展/收缩（类似普通对象），避免了预分配大块堆外内存，如果使用虚拟线程后会减少堆外内存的占用</p>
+<p><strong>参考文档与视频</strong></p>
+<p>原理： <a href="https://www.bilibili.com/video/BV1Ub4y1M7L3/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5" target="_blank">https://www.bilibili.com/video/BV1Ub4y1M7L3/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5</a></p>
+<p>异步发展史： <a href="https://www.bilibili.com/video/BV1Fu4m1K7xb/?share_source=copy_web&amp;vd_source=d30c780580db9da56e2e4f9fa6acf1a5" target="_blank">【[Devoxx2023]深入理解Java异步编程发展历史-从线程到响应式再到虚拟线程】</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/670651709?utm_psn=1875166905750401024" target="_blank">https://zhuanlan.zhihu.com/p/670651709?utm_psn=1875166905750401024</a></p>
+<p>jep491的解决分析： <a href="https://mp.weixin.qq.com/s/e6EBjyN-nJM9ltGoxiTKlA" target="_blank">https://mp.weixin.qq.com/s/e6EBjyN-nJM9ltGoxiTKlA</a></p>
+
+                                
+                                </section>
+                            
+    </div>
+    <div class="search-results">
+        <div class="has-results">
+            
+            <h1 class="search-results-title"><span class='search-results-count'></span> results matching "<span class='search-query'></span>"</h1>
+            <ul class="search-results-list"></ul>
+            
+        </div>
+        <div class="no-results">
+            
+            <h1 class="search-results-title">No results matching "<span class='search-query'></span>"</h1>
+            
+        </div>
+    </div>
+</div>
+
+                        </div>
+                    </div>
+                
+            </div>
+
+            
+                
+                <a href="../" class="navigation navigation-prev navigation-unique" aria-label="Previous page: 首页">
+                    <i class="fa fa-angle-left"></i>
+                </a>
+                
+                
+            
+        
+    </div>
+
+    <script>
+        var gitbook = gitbook || [];
+        gitbook.push(function() {
+            gitbook.page.hasChanged({"page":{"title":"虚拟线程分享","level":"2.1","depth":1,"previous":{"title":"首页","level":"1.1","depth":1,"path":"README.md","ref":"README.md","articles":[]},"dir":"ltr"},"config":{"plugins":["sharing"],"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"pluginsConfig":{"sharing":{"facebook":false,"twitter":false,"google":false,"weibo":true,"instapaper":false,"vk":false,"all":["facebook","google","twitter","weibo","instapaper"]},"highlight":{},"search":{},"lunr":{"maxIndexSize":1000000,"ignoreSpecialCharacters":false},"fontsettings":{"theme":"white","family":"sans","size":2},"theme-default":{"styles":{"website":"styles/website.css","pdf":"styles/pdf.css","epub":"styles/epub.css","mobi":"styles/mobi.css","ebook":"styles/ebook.css","print":"styles/print.css"},"showLevel":false}},"theme":"default","author":"hulu204","pdf":{"pageNumbers":true,"fontSize":12,"fontFamily":"Arial","paperSize":"a4","chapterMark":"pagebreak","pageBreaksBefore":"/","margin":{"right":62,"left":62,"top":56,"bottom":56},"embedFonts":false},"structure":{"langs":"LANGS.md","readme":"README.md","glossary":"GLOSSARY.md","summary":"SUMMARY.md"},"variables":{},"title":"Hulu204's Blog","language":"zh-hans","gitbook":"3.2.3","description":"我的个人技术博客"},"file":{"path":"virtual-thread/README.md","mtime":"2026-04-09T06:01:31.996Z","type":"markdown"},"gitbook":{"version":"6.1.7","time":"2026-04-09T06:01:37.707Z"},"basePath":"..","book":{"language":""}});
+        });
+    </script>
+</div>
+
+        
+    <noscript>
+        <style>
+            .honkit-cloak {
+                display: block !important;
+            }
+        </style>
+    </noscript>
+    <script>
+        // Restore sidebar state as critical path for prevent layout shift
+        function __init__getSidebarState(defaultValue){
+            var baseKey = "";
+            var key = baseKey + ":sidebar";
+            try {
+                var value = localStorage[key];
+                if (value === undefined) {
+                    return defaultValue;
+                }
+                var parsed = JSON.parse(value);
+                return parsed == null ? defaultValue : parsed;
+            } catch (e) {
+                return defaultValue;
+            }
+        }
+        function __init__restoreLastSidebarState() {
+            var isMobile = window.matchMedia("(max-width: 600px)").matches;
+            if (isMobile) {
+                // Init last state if not mobile
+                return;
+            }
+            var sidebarState = __init__getSidebarState(true);
+            var book = document.querySelector(".book");
+            // Show sidebar if it enabled
+            if (sidebarState && book) {
+                book.classList.add("without-animation", "with-summary");
+            }
+        }
+
+        try {
+            __init__restoreLastSidebarState();
+        } finally {
+            var book = document.querySelector(".book");
+            book.classList.remove("honkit-cloak");
+        }
+    </script>
+    <script src="../gitbook/gitbook.js"></script>
+    <script src="../gitbook/theme.js"></script>
+    
+        
+        <script src="../gitbook/gitbook-plugin-sharing/buttons.js"></script>
+        
+    
+        
+        <script src="../gitbook/gitbook-plugin-search/search-engine.js"></script>
+        
+    
+        
+        <script src="../gitbook/gitbook-plugin-search/search.js"></script>
+        
+    
+        
+        <script src="../gitbook/gitbook-plugin-lunr/lunr.min.js"></script>
+        
+    
+        
+        <script src="../gitbook/gitbook-plugin-lunr/search-lunr.js"></script>
+        
+    
+        
+        <script src="../gitbook/@honkit/honkit-plugin-fontsettings/fontsettings.js"></script>
+        
+    
+
+    </body>
+</html>
+
