@@ -13,23 +13,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v6
         with:
-          node-version: '16'
+          node-version: '24'
 
-      - name: Install GitBook CLI
-        run: |
-          npm install -g gitbook-cli
-          gitbook install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Build GitBook
-        run: gitbook build
+      - name: Build book
+        run: npx honkit build
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_book

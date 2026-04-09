@@ -5,10 +5,7 @@
   "language": "zh-hans",
   "gitbook": "3.2.3",
   "plugins": [
-    "search",
-    "sharing",
-    "fontsettings",
-    "theme-default"
+    "sharing"
   ],
   "pluginsConfig": {
     "sharing": {
