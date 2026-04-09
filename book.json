@@ -1,0 +1,21 @@
+{
+  "title": "Hulu204's Blog",
+  "description": "我的个人技术博客",
+  "author": "hulu204",
+  "language": "zh-hans",
+  "gitbook": "3.2.3",
+  "plugins": [
+    "search",
+    "sharing",
+    "fontsettings",
+    "theme-default"
+  ],
+  "pluginsConfig": {
+    "sharing": {
+      "facebook": false,
+      "twitter": false,
+      "weibo": true,
+      "all": ["facebook", "google", "twitter", "weibo"]
+    }
+  }
+}

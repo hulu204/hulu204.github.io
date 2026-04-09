@@ -1,38 +1,15 @@
 # Hulu204's Blog
 
-这是我的个人博客，使用 Jekyll 构建，托管在 GitHub Pages。
+欢迎来到我的技术博客！
 
-## 本地运行
+这里记录我的技术学习和实践经验，主要关注 Java、并发编程和性能优化。
 
-```bash
-# 安装依赖
-bundle install
+## 最新文章
 
-# 启动本地服务器
-bundle exec jekyll serve
+- [虚拟线程分享](virtual-thread/README.md)
 
-# 访问 http://localhost:4000
-```
+## 关于我
 
-## 发布文章
+Java 开发者，专注于并发编程和性能优化。
 
-在 `_posts` 目录下创建新文件，文件名格式：`YYYY-MM-DD-title.md`
-
-文章开头需要包含 Front Matter：
-
-```markdown
----
-layout: post
-title: "文章标题"
-date: YYYY-MM-DD HH:MM:SS +0800
-categories: 分类
----
-
-文章内容...
-```
-
-## 部署
-
-推送到 GitHub 后，GitHub Pages 会自动构建和部署。
-
-访问地址：https://hulu204.github.io
+- GitHub: [@hulu204](https://github.com/hulu204)
