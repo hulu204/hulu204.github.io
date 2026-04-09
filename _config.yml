@@ -1,0 +1,21 @@
+# 网站设置
+title: Hulu204's Blog
+description: 我的个人技术博客
+author: hulu204
+email: your-email@example.com
+
+# GitHub Pages 设置
+baseurl: ""
+url: "https://hulu204.github.io"
+
+# 主题设置（GitHub Pages 支持的主题）
+theme: minima
+
+# 构建设置
+markdown: kramdown
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+# 显示设置
+show_excerpts: true
