@@ -1,8 +1,4 @@
 ---
 layout: home
-title: 首页
+author_profile: true
 ---
-
-欢迎来到我的个人博客！
-
-这里记录我的技术学习和生活感悟。

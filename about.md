@@ -1,14 +1,18 @@
 ---
-layout: page
+layout: single
 title: 关于
 permalink: /about/
 ---
 
-这是关于页面，你可以在这里介绍自己。
-
 ## 关于我
 
-在这里写一些关于你自己的介绍...
+Java 开发者，专注于并发编程和性能优化。
+
+## 技术栈
+
+- Java / JVM
+- 并发编程
+- 性能优化
 
 ## 联系方式
 
