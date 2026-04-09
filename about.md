@@ -1,10 +1,10 @@
 ---
-layout: single
+layout: default
 title: 关于
 permalink: /about/
 ---
 
-## 关于我
+# 关于我
 
 Java 开发者，专注于并发编程和性能优化。
 
